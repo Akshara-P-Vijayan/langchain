@@ -382,12 +382,4 @@ def _convert_to_v1_from_responses(message: AIMessage) -> AIMessage:
     # Replace the list with the fully converted one
     message.content = list(_iter_blocks())
 
-    # If Response ID is redundantly stored in response_metadata, remove it
-    if (
-        "id" in message.response_metadata
-        and isinstance(message.response_metadata["id"], str)
-        and message.response_metadata["id"].startswith("resp_")
-    ):
-        if message.id == message.response_metadata["id"]:
-            _ = message.response_metadata.pop("id")
     return message
