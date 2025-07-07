@@ -108,6 +108,7 @@ from langchain_openai.chat_models._client_utils import (
 )
 from langchain_openai.chat_models._compat import (
     _convert_from_v03_ai_message,
+    _convert_from_v1_to_chat_completions,
     _convert_to_v03_ai_message,
     _convert_to_v1_from_chat_completions,
     _convert_to_v1_from_chat_completions_chunk,
@@ -1188,7 +1189,12 @@ class BaseChatOpenAI(BaseChatModel):
             else:
                 payload = _construct_responses_api_payload(messages, payload)
         else:
-            payload["messages"] = [_convert_message_to_dict(m) for m in messages]
+            payload["messages"] = [
+                _convert_message_to_dict(_convert_from_v1_to_chat_completions(m))
+                if isinstance(m, AIMessage)
+                else _convert_message_to_dict(m)
+                for m in messages
+            ]
         return payload
 
     def _create_chat_result(

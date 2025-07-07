@@ -284,15 +284,20 @@ def _convert_to_v1_from_chat_completions_chunk(chunk: AIMessageChunk) -> AIMessa
 
 def _convert_from_v1_to_chat_completions(message: AIMessage) -> AIMessage:
     """Convert a v1 message to the Chat Completions format."""
-    # TODO: currently unused, will this break non-OpenAI providers?
     if isinstance(message.content, list):
-        new_content = []
+        new_content: list = []
         for block in message.content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                # Strip annotations
-                new_content.append({"type": "text", "text": block["text"]})
+            if isinstance(block, dict):
+                block_type = block.get("type")
+                if block_type == "text":
+                    # Strip annotations
+                    new_content.append({"type": "text", "text": block["text"]})
+                elif block_type in ("reasoning", "tool_call"):
+                    pass
+                else:
+                    new_content.append(block)
             else:
-                pass
+                new_content.append(block)
         return message.model_copy(update={"content": new_content})
 
     return message
