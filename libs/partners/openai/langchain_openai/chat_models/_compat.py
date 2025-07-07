@@ -63,13 +63,21 @@ formats. The functions are used internally by ChatOpenAI.
 """  # noqa: E501
 
 import json
-from typing import Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Union, cast
 
 from langchain_core.messages import AIMessage, AIMessageChunk
+
+if TYPE_CHECKING:
+    from langchain_core.messages.content_blocks import (
+        TextContentBlock,
+        ToolCallContentBlock,
+        # UrlCitation,
+    )
 
 _FUNCTION_CALL_IDS_MAP_KEY = "__openai_function_call_ids__"
 
 
+# v0.3 / Responses
 def _convert_to_v03_ai_message(
     message: AIMessage, has_reasoning: bool = False
 ) -> AIMessage:
@@ -256,17 +264,20 @@ def _convert_from_v03_ai_message(message: AIMessage) -> AIMessage:
     )
 
 
+# v1 / Chat Completions
 def _convert_to_v1_from_chat_completions(message: AIMessage) -> AIMessage:
     """Mutate a Chat Completions message to the v1 format."""
     if isinstance(message.content, str):
         if message.content:
-            message.content = [{"type": "text", "text": message.content}]
+            block: TextContentBlock = {"type": "text", "text": message.content}
+            message.content = [block]
         else:
             message.content = []
 
     for tool_call in message.tool_calls:
         if id_ := tool_call.get("id"):
-            message.content.append({"type": "tool_call", "id": id_})
+            tool_callblock: ToolCallContentBlock = {"type": "tool_call", "id": id_}
+            message.content.append(tool_callblock)
 
     if "tool_calls" in message.additional_kwargs:
         _ = message.additional_kwargs.pop("tool_calls")
@@ -300,4 +311,83 @@ def _convert_from_v1_to_chat_completions(message: AIMessage) -> AIMessage:
                 new_content.append(block)
         return message.model_copy(update={"content": new_content})
 
+    return message
+
+
+# v1 / Responses
+def _convert_annotation_to_v1(annotation: dict[str, Any]) -> dict[str, Any]:
+    annotation_type = annotation.get("type")
+
+    if annotation_type == "url_citation":
+        new_annotation = {"type": "url_citation", "url": annotation["url"]}
+        for field in ("title", "start_index", "end_index"):
+            if field in annotation:
+                new_annotation[field] = annotation[field]
+        return new_annotation
+
+    if annotation_type == "file_citation":
+        new_annotation = {"type": "document_citation"}
+        if "filename" in annotation:
+            new_annotation["title"] = annotation["filename"]
+        for field in ("file_id", "index"):  # OpenAI-specific
+            if field in annotation:
+                new_annotation[field] = annotation[field]
+        return new_annotation
+
+    # TODO: standardise container_file_citation?
+    return annotation
+
+
+def _explode_reasoning(block: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    if block.get("type") != "reasoning" or not block.get("summary"):
+        yield block
+        return
+
+    # Common part for every exploded line, except 'summary'
+    common = {k: v for k, v in block.items() if k != "summary"}
+
+    # Optional keys that must appear only in the first exploded item
+    first_only = {
+        k: common.pop(k) for k in ("encrypted_content", "status") if k in common
+    }
+
+    for idx, part in enumerate(block["summary"]):
+        new_block = dict(common)
+        new_block["reasoning"] = part.get("text", "")
+        if idx == 0:
+            new_block.update(first_only)
+        yield new_block
+
+
+def _convert_to_v1_from_responses(message: AIMessage) -> AIMessage:
+    if not isinstance(message.content, list):
+        return message
+
+    def _iter_blocks() -> Iterable[dict[str, Any]]:
+        for block in message.content:
+            block_type = block.get("type")
+
+            if block_type == "text" and "annotations" in block:
+                block["annotations"] = [
+                    _convert_annotation_to_v1(a) for a in block["annotations"]
+                ]
+                yield block
+
+            elif block_type == "reasoning":
+                yield from _explode_reasoning(block)
+
+            else:
+                yield block
+
+    # Replace the list with the fully converted one
+    message.content = list(_iter_blocks())
+
+    # If Response ID is redundantly stored in response_metadata, remove it
+    if (
+        "id" in message.response_metadata
+        and isinstance(message.response_metadata["id"], str)
+        and message.response_metadata["id"].startswith("resp_")
+    ):
+        if message.id == message.response_metadata["id"]:
+            _ = message.response_metadata.pop("id")
     return message

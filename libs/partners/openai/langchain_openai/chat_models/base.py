@@ -112,6 +112,7 @@ from langchain_openai.chat_models._compat import (
     _convert_to_v03_ai_message,
     _convert_to_v1_from_chat_completions,
     _convert_to_v1_from_chat_completions_chunk,
+    _convert_to_v1_from_responses,
 )
 
 if TYPE_CHECKING:
@@ -3777,6 +3778,8 @@ def _construct_lc_result_from_responses_api(
     )
     if output_version == "v0":
         message = _convert_to_v03_ai_message(message)
+    elif output_version == "v1":
+        message = _convert_to_v1_from_responses(message)
     else:
         pass
     return ChatResult(generations=[ChatGeneration(message=message)])
@@ -3937,17 +3940,29 @@ def _convert_responses_chunk_to_generation_chunk(
         reasoning["index"] = current_index
         content.append(reasoning)
     elif chunk.type == "response.reasoning_summary_part.added":
-        _advance(chunk.output_index)
-        content.append(
-            {
-                # langchain-core uses the `index` key to aggregate text blocks.
-                "summary": [
-                    {"index": chunk.summary_index, "type": "summary_text", "text": ""}
-                ],
-                "index": current_index,
-                "type": "reasoning",
-            }
-        )
+        if output_version in ("v0", "responses/v1"):
+            _advance(chunk.output_index)
+            content.append(
+                {
+                    # langchain-core uses the `index` key to aggregate text blocks.
+                    "summary": [
+                        {
+                            "index": chunk.summary_index,
+                            "type": "summary_text",
+                            "text": "",
+                        }
+                    ],
+                    "index": current_index,
+                    "type": "reasoning",
+                }
+            )
+        else:
+            block = {"type": "reasoning", "reasoning": ""}
+            if chunk.summary_index > 0:
+                _advance(chunk.output_index, chunk.summary_index)
+                block["id"] = chunk.item_id
+            block["index"] = current_index
+            content.append(block)
     elif chunk.type == "response.image_generation_call.partial_image":
         # Partial images are not supported yet.
         pass
@@ -3982,6 +3997,8 @@ def _convert_responses_chunk_to_generation_chunk(
             AIMessageChunk,
             _convert_to_v03_ai_message(message, has_reasoning=has_reasoning),
         )
+    elif output_version == "v1":
+        message = _convert_to_v1_from_responses(message)
     else:
         pass
     return (
