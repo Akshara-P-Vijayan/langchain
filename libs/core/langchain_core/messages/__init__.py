@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     )
     from langchain_core.messages.chat import ChatMessage, ChatMessageChunk
     from langchain_core.messages.content_blocks import (
+        ContentBlock,
         convert_to_openai_data_block,
         convert_to_openai_image_block,
         is_data_content_block,
@@ -70,6 +71,7 @@ __all__ = (
     "BaseMessageChunk",
     "ChatMessage",
     "ChatMessageChunk",
+    "ContentBlock",
     "FunctionMessage",
     "FunctionMessageChunk",
     "HumanMessage",
@@ -108,6 +110,7 @@ _dynamic_imports = {
     "merge_content": "base",
     "message_to_dict": "base",
     "messages_to_dict": "base",
+    "ContentBlock": "content_blocks",
     "ChatMessage": "chat",
     "ChatMessageChunk": "chat",
     "FunctionMessage": "function",

@@ -78,7 +78,7 @@ class ReasoningContentBlock(TypedDict, total=False):
 
     type: Literal["reasoning"]
     """Type of the content block."""
-    reasoning: str
+    reasoning: NotRequired[str]
     """Reasoning text."""
 
 
@@ -142,6 +142,13 @@ DataContentBlock = Union[
 ]
 
 _DataContentBlockAdapter: TypeAdapter[DataContentBlock] = TypeAdapter(DataContentBlock)
+
+ContentBlock = Union[
+    TextContentBlock,
+    ToolCallContentBlock,
+    ReasoningContentBlock,
+    DataContentBlock,
+]
 
 
 def is_data_content_block(
