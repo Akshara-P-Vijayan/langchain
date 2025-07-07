@@ -383,3 +383,81 @@ def _convert_to_v1_from_responses(message: AIMessage) -> AIMessage:
     message.content = list(_iter_blocks())
 
     return message
+
+
+def _convert_annotation_from_v1(annotation: dict[str, Any]) -> dict[str, Any]:
+    annotation_type = annotation.get("type")
+
+    if annotation_type == "document_citation":
+        new_ann: dict[str, Any] = {"type": "file_citation"}
+
+        if "title" in annotation:
+            new_ann["filename"] = annotation["title"]
+
+        for fld in ("file_id", "index"):
+            if fld in annotation:
+                new_ann[fld] = annotation[fld]
+
+        return new_ann
+
+    return dict(annotation)
+
+
+def _implode_reasoning_blocks(blocks: list[dict[str, Any]]) -> Iterable[dict[str, Any]]:
+    i = 0
+    n = len(blocks)
+
+    while i < n:
+        blk = blocks[i]
+
+        # Ordinary block – just yield a shallow copy
+        if blk.get("type") != "reasoning" or "reasoning" not in blk:
+            yield dict(blk)
+            i += 1
+            continue
+
+        summary: list[dict[str, str]] = [
+            {"type": "summary_text", "text": blk.get("reasoning", "")}
+        ]
+        # 'common' is every field except the exploded 'reasoning'
+        common = {k: v for k, v in blk.items() if k != "reasoning"}
+
+        i += 1
+        while i < n:
+            nxt = blocks[i]
+            if nxt.get("type") == "reasoning" and "reasoning" in nxt:
+                summary.append(
+                    {"type": "summary_text", "text": nxt.get("reasoning", "")}
+                )
+                i += 1
+            else:
+                break
+
+        merged = dict(common)
+        merged["summary"] = summary
+        yield merged
+
+
+def _convert_from_v1_to_responses(message: AIMessage) -> AIMessage:
+    if not isinstance(message.content, list):
+        return message
+
+    new_content: list = []
+    for block in message.content:
+        if (
+            isinstance(block, dict)
+            and block.get("type") == "text"
+            and "annotations" in block
+        ):
+            # Need a copy because we’re changing the annotations list
+            converted = dict(block)
+            converted["annotations"] = [
+                _convert_annotation_from_v1(a) for a in block["annotations"]
+            ]
+            new_content.append(converted)
+        else:
+            new_content.append(block)
+
+    new_content = list(_implode_reasoning_blocks(new_content))
+
+    return message.model_copy(update={"content": new_content})

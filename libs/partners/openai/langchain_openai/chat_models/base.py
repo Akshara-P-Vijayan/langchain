@@ -109,6 +109,7 @@ from langchain_openai.chat_models._client_utils import (
 from langchain_openai.chat_models._compat import (
     _convert_from_v03_ai_message,
     _convert_from_v1_to_chat_completions,
+    _convert_from_v1_to_responses,
     _convert_to_v03_ai_message,
     _convert_to_v1_from_chat_completions,
     _convert_to_v1_from_chat_completions_chunk,
@@ -3496,6 +3497,7 @@ def _construct_responses_api_input(messages: Sequence[BaseMessage]) -> list:
     for lc_msg in messages:
         if isinstance(lc_msg, AIMessage):
             lc_msg = _convert_from_v03_ai_message(lc_msg)
+            lc_msg = _convert_from_v1_to_responses(lc_msg)
         msg = _convert_message_to_dict(lc_msg)
         # "name" parameter unsupported
         if "name" in msg:
