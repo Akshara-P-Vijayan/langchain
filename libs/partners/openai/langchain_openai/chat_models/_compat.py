@@ -357,7 +357,12 @@ def _convert_annotation_to_v1(
 
 
 def _explode_reasoning(block: dict[str, Any]) -> Iterable[ReasoningContentBlock]:
-    if block.get("type") != "reasoning" or not block.get("summary"):
+    if block.get("type") != "reasoning" or "summary" not in block:
+        yield block
+        return
+
+    if not block["summary"]:
+        _ = block.pop("summary", None)
         yield block
         return
 
@@ -426,6 +431,8 @@ def _convert_to_v1_from_responses(message: AIMessage) -> AIMessage:
                     "type": "non_standard",
                     "value": block,
                 }
+                if "index" in new_block["value"]:
+                    new_block["index"] = new_block["value"].pop("index")
                 yield new_block
 
     # Replace the list with the fully converted one

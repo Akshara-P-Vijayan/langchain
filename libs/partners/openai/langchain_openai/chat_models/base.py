@@ -3862,7 +3862,17 @@ def _convert_responses_chunk_to_generation_chunk(
             annotation = chunk.annotation.model_dump(exclude_none=True, mode="json")
         content.append({"annotations": [annotation], "index": current_index})
     elif chunk.type == "response.output_text.done":
-        content.append({"id": chunk.item_id, "index": current_index})
+        if output_version == "v1":
+            content.append(
+                {
+                    "type": "text",
+                    "text": "",
+                    "id": chunk.item_id,
+                    "index": current_index,
+                }
+            )
+        else:
+            content.append({"id": chunk.item_id, "index": current_index})
     elif chunk.type == "response.created":
         id = chunk.response.id
         response_metadata["id"] = chunk.response.id  # Backwards compatibility
@@ -3938,6 +3948,7 @@ def _convert_responses_chunk_to_generation_chunk(
         content.append({"type": "refusal", "refusal": chunk.refusal})
     elif chunk.type == "response.output_item.added" and chunk.item.type == "reasoning":
         _advance(chunk.output_index)
+        current_sub_index = 0
         reasoning = chunk.item.model_dump(exclude_none=True, mode="json")
         reasoning["index"] = current_index
         content.append(reasoning)
