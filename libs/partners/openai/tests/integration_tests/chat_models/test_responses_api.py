@@ -143,13 +143,15 @@ async def test_web_search_async() -> None:
         assert tool_output["type"] == "web_search_call"
 
 
-@pytest.mark.flaky(retries=3, delay=1)
-def test_function_calling() -> None:
+@pytest.mark.default_cassette("test_function_calling.yaml.gz")
+@pytest.mark.vcr
+@pytest.mark.parametrize("output_version", ["v0", "responses/v1", "v1"])
+def test_function_calling(output_version: Literal["v0", "responses/v1", "v1"]) -> None:
     def multiply(x: int, y: int) -> int:
         """return x * y"""
         return x * y
 
-    llm = ChatOpenAI(model=MODEL_NAME)
+    llm = ChatOpenAI(model=MODEL_NAME, output_version=output_version)
     bound_llm = llm.bind_tools([multiply, {"type": "web_search_preview"}])
     ai_msg = cast(AIMessage, bound_llm.invoke("whats 5 * 4"))
     assert len(ai_msg.tool_calls) == 1
