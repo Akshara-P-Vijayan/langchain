@@ -7,7 +7,7 @@ from pydantic import TypeAdapter, ValidationError
 from typing_extensions import NotRequired, TypedDict
 
 
-# Test and annotations
+# Text and annotations
 class UrlCitation(TypedDict, total=False):
     """Citation from a URL."""
 
@@ -47,6 +47,15 @@ class DocumentCitation(TypedDict, total=False):
     """End index of the response text for which the annotation applies."""
 
 
+class NonStandardAnnotation(TypedDict, total=False):
+    """Provider-specific annotation format."""
+
+    type: Literal["non_standard_annotation"]
+    """Type of the content block."""
+    value: dict[str, Any]
+    """Provider-specific annotation data."""
+
+
 class TextContentBlock(TypedDict, total=False):
     """Content block for text output."""
 
@@ -54,7 +63,9 @@ class TextContentBlock(TypedDict, total=False):
     """Type of the content block."""
     text: str
     """Block text."""
-    annotations: NotRequired[list[Union[UrlCitation, DocumentCitation]]]
+    annotations: NotRequired[
+        list[Union[UrlCitation, DocumentCitation, NonStandardAnnotation]]
+    ]
     """Citations and other annotations."""
 
 
@@ -143,11 +154,26 @@ DataContentBlock = Union[
 
 _DataContentBlockAdapter: TypeAdapter[DataContentBlock] = TypeAdapter(DataContentBlock)
 
+
+# Non-standard
+class NonStandardContentBlock(TypedDict, total=False):
+    """Content block provider-specific data.
+
+    This block contains data for which there is not yet a standard type.
+    """
+
+    type: Literal["non_standard"]
+    """Type of the content block."""
+    value: dict[str, Any]
+    """Provider-specific data."""
+
+
 ContentBlock = Union[
     TextContentBlock,
     ToolCallContentBlock,
     ReasoningContentBlock,
     DataContentBlock,
+    NonStandardContentBlock,
 ]
 
 
